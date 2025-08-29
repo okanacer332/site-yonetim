@@ -3,6 +3,7 @@ package com.yonetim.sistemapi.controller;
 import com.yonetim.sistemapi.model.Daire;
 import com.yonetim.sistemapi.repository.BlokRepository;
 import com.yonetim.sistemapi.repository.DaireRepository;
+import jakarta.validation.Valid; // GÜNCELLEME 1: @Valid için import eklendi.
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,7 +35,10 @@ public class DaireController {
     }
 
     @PostMapping
-    public ResponseEntity<Daire> yeniDaireEkle(@RequestBody Daire yeniDaire) {
+    // GÜNCELLEME 2: @Valid anotasyonu eklendi.
+    // Artık API'ye gelen 'yeniDaire' nesnesi, Daire modelinde tanımladığımız
+    // @NotBlank, @Min gibi tüm kurallara göre kontrol edilecek.
+    public ResponseEntity<Daire> yeniDaireEkle(@Valid @RequestBody Daire yeniDaire) {
         if (!blokRepository.existsById(yeniDaire.getBlokId())) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
@@ -49,7 +53,9 @@ public class DaireController {
      * @return Güncellenmiş Daire nesnesi.
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Daire> daireGuncelle(@PathVariable String id, @RequestBody Daire daireDetaylari) {
+    // GÜNCELLEME 3: @Valid anotasyonu eklendi.
+    // Güncelleme işlemi sırasında da verinin geçerli olduğundan emin oluyoruz.
+    public ResponseEntity<Daire> daireGuncelle(@PathVariable String id, @Valid @RequestBody Daire daireDetaylari) {
         Optional<Daire> daireData = daireRepository.findById(id);
 
         if (daireData.isPresent()) {

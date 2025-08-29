@@ -28,6 +28,16 @@ public class FinansalIslem {
     // Giderler için bir kategori
     private String kategori;
 
+    // GÜNCELLEME 1: İşlemin iptal durumunu tutan alan.
+    // Bu alan 'true' ise, işlem iptal edilmiş ve etkisi bir ters kayıtla sıfırlanmıştır.
+    // Arayüzde bu tür kayıtları gri veya üstü çizili gösterebiliriz.
+    private boolean isIptalEdildi = false;
+
+    // GÜNCELLEME 2: Düzeltme kaydının ID'sini tutan alan.
+    // Bir işlem iptal edildiğinde, onu düzelten ters kaydın ID'si buraya yazılır.
+    // Bu, orijinal işlem ile düzeltme işlemi arasında doğrudan bir bağ kurar.
+    private String duzeltmeKaydiId;
+
 
     public enum IslemTipi {
         GELIR,

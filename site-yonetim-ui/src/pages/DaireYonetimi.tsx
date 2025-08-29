@@ -76,27 +76,24 @@ function DaireYonetimi() {
     fetchBloklar();
   }, []);
 
-  // HATA DÜZELTMESİ: blokMap'i bileşenin ana kapsamında tanımlıyoruz.
-  // useMemo kullanarak, sadece 'bloklar' dizisi değiştiğinde yeniden hesaplanmasını sağlıyoruz.
   const blokMap = useMemo(() => new Map(bloklar.map(blok => [blok.id, blok.ad])), [bloklar]);
 
-  // Ham daire verisini, tabloda gösterilecek formata dönüştürüyoruz
   const daireViewData: DaireView[] = useMemo(() => {
     return daireler.map(daire => {
-      let oturanKisi = '---'; // Varsayılan değer
+      let oturanKisi = '---'; 
       if (daire.durum === 'KIRACI' && daire.kiraciAdi) {
         oturanKisi = daire.kiraciAdi;
       } else if (daire.durum === 'MULK_SAHIBI') {
-        oturanKisi = daire.mulkSahibiAdi; // Mülk sahibi oturuyorsa, oturan kişi kendisidir
+        oturanKisi = daire.mulkSahibiAdi; 
       }
       return {
         ...daire,
         blokAdi: blokMap.get(daire.blokId) || 'Bilinmeyen Blok',
         oturanKisi: oturanKisi,
-        original: daire // Orijinal veriyi sakla
+        original: daire 
       };
     });
-  }, [daireler, blokMap]); // Artık 'blokMap'e bağımlı
+  }, [daireler, blokMap]); 
   
   const showNotification = (type: Notification['type'], message: string) => {
     setNotification({ type, message });
@@ -187,10 +184,12 @@ function DaireYonetimi() {
       <ContentCard title="Yeni Daire Ekle" component="form" onSubmit={handleEkle}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2}>
+            {/* GÜNCELLEME 1: "Blok" alanı artık zorunlu. */}
             <TextField select label="Blok" name="blokId" value={formState.blokId} onChange={handleFormChange} required fullWidth>
               {bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}
             </TextField>
-            <TextField label="Kapı No" name="kapiNo" type="number" value={formState.kapiNo} onChange={handleFormChange} required fullWidth />
+            {/* GÜNCELLEME 2: "Kapı No" alanı zorunlu ve min. 1 olmalı. */}
+            <TextField label="Kapı No" name="kapiNo" type="number" value={formState.kapiNo} onChange={handleFormChange} required fullWidth inputProps={{ min: 1 }} />
             <TextField select label="Durum" name="durum" value={formState.durum} onChange={handleFormChange} required fullWidth>
               <MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem>
               <MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem>
@@ -199,7 +198,9 @@ function DaireYonetimi() {
           </Stack>
           <Divider sx={{ my: 1 }}><Typography variant="body2">Mülk Sahibi Bilgileri</Typography></Divider>
           <Stack direction="row" spacing={2}>
+            {/* GÜNCELLEME 3: "Mülk Sahibi Adı" alanı zorunlu. */}
             <TextField label="Mülk Sahibi Adı Soyadı" name="mulkSahibiAdi" value={formState.mulkSahibiAdi} onChange={handleFormChange} required fullWidth />
+            {/* GÜNCELLEME 4: "Mülk Sahibi Telefonu" alanı zorunlu. */}
             <TextField label="Mülk Sahibi Telefonu" name="mulkSahibiTelefonu" value={formState.mulkSahibiTelefonu} onChange={handleFormChange} required fullWidth />
           </Stack>
           {formState.durum === 'KIRACI' && (
@@ -239,7 +240,7 @@ function DaireYonetimi() {
             <TextField select label="Blok" name="blokId" value={editedDaire.blokId || ''} onChange={handleEditFormChange} required fullWidth>
               {bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}
             </TextField>
-            <TextField label="Kapı No" name="kapiNo" type="number" value={editedDaire.kapiNo || ''} onChange={handleEditFormChange} required fullWidth />
+            <TextField label="Kapı No" name="kapiNo" type="number" value={editedDaire.kapiNo || ''} onChange={handleEditFormChange} required fullWidth inputProps={{ min: 1 }}/>
             <TextField select label="Durum" name="durum" value={editedDaire.durum || 'BOS'} onChange={handleEditFormChange} required fullWidth>
               <MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem>
               <MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem>

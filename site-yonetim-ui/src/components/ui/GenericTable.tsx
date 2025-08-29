@@ -31,7 +31,10 @@ interface GenericTableProps<T> {
   error: string | null;
   renderActions?: (item: T) => React.ReactNode;
   exportFileName?: string;
-  defaultRowsPerPage?: number; // Yeni prop
+  defaultRowsPerPage?: number;
+  // GÜNCELLEME 1: Hata veren 'highlightedRowId' özelliği eklendi.
+  // Artık bu bileşen, dışarıdan bir satır ID'si alarak o satırı vurgulayabileceğini biliyor.
+  highlightedRowId?: string | null;
 }
 
 type Order = 'asc' | 'desc';
@@ -48,11 +51,12 @@ function getComparator<Key extends keyof any>(order: Order, orderBy: Key): (a: {
     : (a, b) => -descendingComparator(a, b, orderBy);
 }
 
-function GenericTable<T extends { id: string }>({ columns, data, isLoading, error, renderActions, exportFileName = 'rapor', defaultRowsPerPage = 10 }: GenericTableProps<T>) {
+// GÜNCELLEME 2: 'highlightedRowId' props'u fonksiyona parametre olarak eklendi.
+function GenericTable<T extends { id: string }>({ columns, data, isLoading, error, renderActions, exportFileName = 'rapor', defaultRowsPerPage = 10, highlightedRowId }: GenericTableProps<T>) {
   const [order, setOrder] = useState<Order>('asc');
   const [orderBy, setOrderBy] = useState<keyof T>(columns[0]?.accessorKey || 'id');
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage); // Yeni prop'u kullan
+  const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
   const [filter, setFilter] = useState('');
 
   const handleRequestSort = (property: keyof T) => {
@@ -134,7 +138,17 @@ function GenericTable<T extends { id: string }>({ columns, data, isLoading, erro
           </TableHead>
           <TableBody>
             {visibleRows.length > 0 ? visibleRows.map((item) => (
-              <TableRow key={item.id} hover>
+              // GÜNCELLEME 3: Satırın ID'si 'highlightedRowId' ile eşleşiyorsa arkaplan rengini değiştir.
+              <TableRow
+                key={item.id}
+                hover
+                sx={{
+                  ...(item.id === highlightedRowId && {
+                    backgroundColor: '#FFFACD', // Vurgulama için açık sarı bir renk
+                    transition: 'background-color 0.5s ease-in-out',
+                  }),
+                }}
+              >
                 {columns.map((column) => (
                   <TableCell key={String(column.accessorKey)}>
                     {column.cell ? column.cell(item) : String(item[column.accessorKey])}
@@ -153,7 +167,7 @@ function GenericTable<T extends { id: string }>({ columns, data, isLoading, erro
         </Table>
       </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[5, 10, 20, 50]} // Seçenekleri güncelledik
+        rowsPerPageOptions={[5, 10, 20, 50]}
         component="div"
         count={filteredData.length}
         rowsPerPage={rowsPerPage}

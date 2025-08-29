@@ -124,6 +124,7 @@ function BlokYonetimi() {
             value={yeniBlokAdi}
             onChange={(e) => setYeniBlokAdi(e.target.value)}
             disabled={isSubmitting}
+            required // GÜNCELLEME: Bu alanın boş gönderilmesini engeller.
           />
           <SubmitButton
             isLoading={isSubmitting}

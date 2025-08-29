@@ -1,10 +1,11 @@
 import { useEffect, useState, FormEvent, useMemo } from 'react';
 import {
   Typography, Stack, TextField, MenuItem,
-  IconButton, Tooltip, Snackbar, Alert, Box, FormControlLabel, Checkbox
+  // GÜNCELLEME 1: Durum etiketleri için Chip bileşenini ekliyoruz.
+  IconButton, Tooltip, Snackbar, Alert, Box, FormControlLabel, Checkbox, Chip
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import CancelIcon from '@mui/icons-material/Cancel';
+import axios from 'axios';
 
 import { useCrudApi } from '../hooks/useCrudApi';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -12,7 +13,6 @@ import ContentCard from '../components/ui/ContentCard';
 import SubmitButton from '../components/ui/SubmitButton';
 import GenericTable, { ColumnDef } from '../components/ui/GenericTable';
 
-// Veri yapılarını tanımlıyoruz
 interface Blok {
   id: string;
   ad: string;
@@ -26,6 +26,8 @@ interface FinansalIslem {
   tarih: string;
   blokId?: string;
   kategori?: string;
+  isIptalEdildi?: boolean;
+  duzeltmeKaydiId?: string;
 }
 
 interface FinansalIslemView extends FinansalIslem {
@@ -45,16 +47,16 @@ const initialFormState = {
 const giderKategorileri = ["Elektrik", "Su", "Doğalgaz", "Personel Maaşı", "Bakım-Onarım", "Temizlik", "Diğer"];
 
 function KasaHareketleri() {
-  const { data: islemler, isLoading, error, fetchData: fetchIslemler, addItem, deleteItem } = useCrudApi<FinansalIslem>('/kasa-hareketleri');
+  const { data: islemler, isLoading, error, fetchData: fetchIslemler, addItem } = useCrudApi<FinansalIslem>('/kasa-hareketleri');
   const { data: bloklar, fetchData: fetchBloklar } = useCrudApi<Blok>('/bloklar');
 
   const [formState, setFormState] = useState(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [yansitilsinMi, setYansitilsinMi] = useState(false); // Yeni state
+  const [yansitilsinMi, setYansitilsinMi] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedIslem, setSelectedIslem] = useState<FinansalIslem | null>(null);
 
 
@@ -94,9 +96,7 @@ function KasaHareketleri() {
         blokId: formState.blokId || undefined,
         kategori: formState.tip === 'GIDER' ? formState.kategori : undefined,
       };
-
       if (formState.tip === 'GIDER' && yansitilsinMi) {
-        // Olağanüstü borçlandırma API'sini çağır
         const response = await fetch('http://localhost:8080/api/borclandirma/olaganustu', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -105,41 +105,54 @@ function KasaHareketleri() {
         if (!response.ok) throw new Error('Olağanüstü borç yansıtılırken bir hata oluştu.');
         showNotification('success', 'Gider kasaya işlendi ve dairelere borç olarak yansıtıldı!');
       } else {
-        // Normal kasa hareketi ekle
         await addItem(dataToSubmit);
         showNotification('success', 'İşlem başarıyla eklendi!');
       }
-      
       setFormState(initialFormState);
-      setYansitilsinMi(false); // Checkbox'ı sıfırla
+      setYansitilsinMi(false);
     } catch (err: any) {
-      showNotification('error', err.message);
+      showNotification('error', 'Bir hata oluştu: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSil = async () => {
+  const handleIptalEt = async () => {
     if (!selectedIslem) return;
     try {
-        await deleteItem(selectedIslem.id);
-        showNotification('error', 'İşlem başarıyla silindi!');
-        handleCloseDeleteConfirm();
+        await axios.post(`http://localhost:8080/api/kasa-hareketleri/${selectedIslem.id}/iptal`);
+        showNotification('success', 'İşlem başarıyla iptal edildi ve düzeltme kaydı oluşturuldu!');
+        handleCloseConfirm();
+        fetchIslemler();
     } catch (err: any) {
-        showNotification('error', err.message);
+        showNotification('error', 'İşlem iptal edilirken bir hata oluştu: ' + (err.response?.data?.message || err.message));
     }
   };
 
-  const handleOpenDeleteConfirm = (islem: FinansalIslem) => {
+  const handleOpenConfirm = (islem: FinansalIslem) => {
     setSelectedIslem(islem);
-    setDeleteConfirmOpen(true);
+    setConfirmOpen(true);
   };
-  const handleCloseDeleteConfirm = () => setDeleteConfirmOpen(false);
+  const handleCloseConfirm = () => setConfirmOpen(false);
 
+  // GÜNCELLEME 2: Sütunları yeniden düzenliyoruz.
+  // Üzeri çizili stilini kaldırıp yerine "Durum" sütunu ekliyoruz.
   const columns: ColumnDef<FinansalIslemView>[] = [
     { header: 'Tarih', accessorKey: 'tarih' },
     { header: 'Açıklama', accessorKey: 'aciklama' },
-    { header: 'İlgili Blok', accessorKey: 'blokAdi' },
+    { 
+      header: 'Durum', 
+      accessorKey: 'isIptalEdildi', // Sıralama için anahtar olarak kullanabiliriz
+      cell: (item) => {
+        if (item.isIptalEdildi) {
+          return <Chip label="İptal Edildi" color="default" size="small" variant="outlined" />;
+        }
+        if (item.kategori === 'İptal/Düzeltme') {
+          return <Chip label="Düzeltme Kaydı" color="info" size="small" variant="outlined" />;
+        }
+        return <Chip label="Onaylandı" color="success" size="small" />;
+      }
+    },
     { header: 'Kategori', accessorKey: 'kategori' },
     { header: 'Tutar', accessorKey: 'formattedTutar' },
   ];
@@ -147,37 +160,13 @@ function KasaHareketleri() {
   return (
     <Stack spacing={4}>
       <ContentCard title="Yeni Kasa Hareketi Ekle" component="form" onSubmit={handleEkle}>
+        { /* Form içeriği aynı */ }
         <Stack spacing={2}>
-            <Stack direction="row" spacing={2}>
-                <TextField select label="İşlem Tipi" name="tip" value={formState.tip} onChange={handleFormChange} required fullWidth>
-                    <MenuItem value="GIDER">Gider</MenuItem>
-                    <MenuItem value="GELIR">Gelir</MenuItem>
-                </TextField>
-                <TextField label="Tarih" name="tarih" type="date" value={formState.tarih} onChange={handleFormChange} required fullWidth InputLabelProps={{ shrink: true }} />
-                <TextField label="Tutar (₺)" name="tutar" type="number" value={formState.tutar} onChange={handleFormChange} required fullWidth inputProps={{ step: "0.01" }} />
-            </Stack>
+            <Stack direction="row" spacing={2}><TextField select label="İşlem Tipi" name="tip" value={formState.tip} onChange={handleFormChange} required fullWidth><MenuItem value="GIDER">Gider</MenuItem><MenuItem value="GELIR">Gelir</MenuItem></TextField><TextField label="Tarih" name="tarih" type="date" value={formState.tarih} onChange={handleFormChange} required fullWidth InputLabelProps={{ shrink: true }} /><TextField label="Tutar (₺)" name="tutar" type="number" value={formState.tutar} onChange={handleFormChange} required fullWidth inputProps={{ step: "0.01" }} /></Stack>
             <TextField label="Açıklama" name="aciklama" value={formState.aciklama} onChange={handleFormChange} required fullWidth />
-            {formState.tip === 'GIDER' && (
-                <Stack spacing={2}>
-                    <Stack direction="row" spacing={2}>
-                        <TextField select label="İlgili Blok (Opsiyonel)" name="blokId" value={formState.blokId} onChange={handleFormChange} fullWidth>
-                            <MenuItem value="">Genel Gider</MenuItem>
-                            {bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}
-                        </TextField>
-                        <TextField select label="Gider Kategorisi" name="kategori" value={formState.kategori} onChange={handleFormChange} required fullWidth>
-                            {giderKategorileri.map(cat => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
-                        </TextField>
-                    </Stack>
-                    <FormControlLabel
-                        control={<Checkbox checked={yansitilsinMi} onChange={(e) => setYansitilsinMi(e.target.checked)} />}
-                        label="Bu gideri tüm dairelere borç olarak yansıt (Olağanüstü Gider)"
-                    />
-                </Stack>
-            )}
+            {formState.tip === 'GIDER' && (<Stack spacing={2}><Stack direction="row" spacing={2}><TextField select label="İlgili Blok (Opsiyonel)" name="blokId" value={formState.blokId} onChange={handleFormChange} fullWidth><MenuItem value="">Genel Gider</MenuItem>{bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}</TextField><TextField select label="Gider Kategorisi" name="kategori" value={formState.kategori} onChange={handleFormChange} required fullWidth>{giderKategorileri.map(cat => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}</TextField></Stack><FormControlLabel control={<Checkbox checked={yansitilsinMi} onChange={(e) => setYansitilsinMi(e.target.checked)} />} label="Bu gideri tüm dairelere borç olarak yansıt (Olağanüstü Gider)" /></Stack>)}
         </Stack>
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <SubmitButton isLoading={isSubmitting}>Kasa Hareketi Ekle</SubmitButton>
-        </Box>
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}><SubmitButton isLoading={isSubmitting}>Kasa Hareketi Ekle</SubmitButton></Box>
       </ContentCard>
 
       <ContentCard title="Kasa Hareketleri" spacing={0}>
@@ -187,25 +176,27 @@ function KasaHareketleri() {
           isLoading={isLoading}
           error={error}
           renderActions={(islem) => (
-            <>
-              {/* Düzenleme butonu ileride eklenebilir */}
-              {/* <Tooltip title="Düzenle"><IconButton size="small" color="primary"><EditIcon /></IconButton></Tooltip> */}
-              <Tooltip title="Sil"><IconButton size="small" color="error" onClick={() => handleOpenDeleteConfirm(islem)}><DeleteIcon /></IconButton></Tooltip>
-            </>
+            <Tooltip title="İşlemi İptal Et">
+              <span>
+                <IconButton size="small" color="error" onClick={() => handleOpenConfirm(islem)} disabled={islem.isIptalEdildi || islem.kategori === 'İptal/Düzeltme'}>
+                  <CancelIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
           )}
         />
       </ContentCard>
 
       <ConfirmDialog
-        open={deleteConfirmOpen}
-        onCancel={handleCloseDeleteConfirm}
-        onConfirm={handleSil}
-        title="İşlem Silinsin mi?"
-        message={`"${selectedIslem?.aciklama}" açıklamasındaki işlemi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
+        open={confirmOpen}
+        onCancel={handleCloseConfirm}
+        onConfirm={handleIptalEt}
+        title="İşlem İptal Edilsin mi?"
+        message={`"${selectedIslem?.aciklama}" açıklamasındaki işlem iptal edilecektir. Bu işlem, orijinal kaydı pasif hale getirir ve zıt yönde bir düzeltme kaydı oluşturur. Emin misiniz?`}
       />
 
       {notification && (
-        <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={handleSnackbarClose} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={handleSnackbarClose} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
           <Alert onClose={handleSnackbarClose} severity={notification.type} sx={{ width: '100%' }} variant="filled">{notification.message}</Alert>
         </Snackbar>
       )}
