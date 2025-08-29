@@ -24,4 +24,7 @@ public interface FinansalIslemRepository extends MongoRepository<FinansalIslem, 
      * Belirli bir bloğa ait tüm finansal işlemleri bulur.
      */
     List<FinansalIslem> findByBlokId(String blokId);
+
+    // GÜNCELLEME: Artık MongoTemplate ile Servis katmanında yaptığımız için
+    // hatalı çalışan @Aggregation metotları buradan kaldırıldı.
 }

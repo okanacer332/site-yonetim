@@ -1,42 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Typography, Stack, TextField, Box, Button
+  Typography, Stack, TextField, Box, Button, Paper, Table, TableBody, TableCell, TableHead, TableRow, CircularProgress, Divider
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+// GÜNCELLEME 1: Grafik kütüphanelerine artık ihtiyaç duymadığımız için importları kaldırıyoruz.
 
-import { useCrudApi } from '../hooks/useCrudApi';
 import ContentCard from '../components/ui/ContentCard';
 import GenericTable, { ColumnDef } from '../components/ui/GenericTable';
 import SubmitButton from '../components/ui/SubmitButton';
+import axios from 'axios';
 
-// Veri yapıları
+// --- VERİ MODELLERİ ---
+interface KategoriOzetDto {
+  kategori: string;
+  toplamTutar: number;
+}
+interface FinansalRaporDto {
+  toplamGelir: number;
+  toplamGider: number;
+  netBakiye: number;
+  gelirlerByKategori: KategoriOzetDto[];
+  giderlerByKategori: KategoriOzetDto[];
+}
 interface FinansalIslem {
-  id: string;
-  tip: 'GELIR' | 'GIDER';
-  aciklama: string;
-  tutar: number;
-  tarih: string;
-  daireId?: string;
-  blokId?: string;
-  kategori?: string;
+  id: string; tip: 'GELIR' | 'GIDER'; aciklama: string; tutar: number; tarih: string; daireId?: string; blokId?: string; kategori?: string;
 }
-interface Daire {
-  id: string;
-  blokId: string;
-  kapiNo: number;
-  mulkSahibiAdi: string;
-  durum: 'MULK_SAHIBI' | 'KIRACI' | 'BOS';
-  kiraciAdi?: string;
-}
-interface Blok {
-  id: string;
-  ad: string;
-}
-
-interface DateRange {
-    start: string;
-    end: string;
-}
+interface DateRange { start: string; end: string; }
 
 const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
 const getLastDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -47,16 +36,8 @@ function Raporlama() {
     end: getLastDayOfMonth(new Date())
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [reportData, setReportData] = useState<FinansalIslem[]>([]);
-
-  // Raporu zenginleştirmek için daire ve blok verilerini de çekiyoruz
-  const { data: daireler, fetchData: fetchDaireler } = useCrudApi<Daire>('/daireler');
-  const { data: bloklar, fetchData: fetchBloklar } = useCrudApi<Blok>('/bloklar');
-
-  useEffect(() => {
-    fetchDaireler();
-    fetchBloklar();
-  }, []);
+  const [raporOzet, setRaporOzet] = useState<FinansalRaporDto | null>(null);
+  const [islemListesi, setIslemListesi] = useState<FinansalIslem[]>([]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDateRange(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -64,52 +45,35 @@ function Raporlama() {
 
   const handleFetchReport = async () => {
     setIsSubmitting(true);
+    setRaporOzet(null);
+    setIslemListesi([]);
     try {
-        const response = await fetch(`http://localhost:8080/api/kasa-hareketleri?baslangicTarihi=${dateRange.start}&bitisTarihi=${dateRange.end}`);
-        if (!response.ok) throw new Error('Rapor verisi çekilemedi.');
-        const data = await response.json();
-        setReportData(data);
+        const ozetUrl = `http://localhost:8080/api/raporlar/finansal/ozet?baslangicTarihi=${dateRange.start}&bitisTarihi=${dateRange.end}`;
+        const detayUrl = `http://localhost:8080/api/kasa-hareketleri?baslangicTarihi=${dateRange.start}&bitisTarihi=${dateRange.end}`;
+        const [ozetResponse, detayResponse] = await Promise.all([axios.get(ozetUrl), axios.get(detayUrl)]);
+        setRaporOzet(ozetResponse.data);
+        setIslemListesi(detayResponse.data);
     } catch (err) {
         console.error(err);
-        setReportData([]);
+        setRaporOzet(null);
+        setIslemListesi([]);
     } finally {
         setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    handleFetchReport();
+  }, []);
   
-  const daireMap = useMemo(() => new Map(daireler.map(d => [d.id, d])), [daireler]);
-  const blokMap = useMemo(() => new Map(bloklar.map(b => [b.id, b.ad])), [bloklar]);
-
-  // Rapor verisini zenginleştirerek yeni bir view modeli oluşturuyoruz
-  const reportViewData = useMemo(() => {
-    return reportData.map(islem => {
-      let aciklama = islem.aciklama;
-      // Eğer backend'den gelen açıklama yetersizse (eski kayıtlar için), biz zenginleştirelim
-      if (islem.daireId && islem.kategori === 'Aidat' && !aciklama.includes('Daire')) {
-        const daire = daireMap.get(islem.daireId);
-        if (daire) {
-          const blokAdi = blokMap.get(daire.blokId) || '';
-          const oturanKisi = daire.durum === 'KIRACI' && daire.kiraciAdi ? daire.kiraciAdi : daire.mulkSahibiAdi;
-          aciklama = `${blokAdi} - Daire ${daire.kapiNo} (${oturanKisi}) - ${aciklama}`;
-        }
-      }
-      return { ...islem, aciklama };
-    });
-  }, [reportData, daireMap, blokMap]);
-
-  const reportSummary = useMemo(() => {
-    const toplamGelir = reportData.filter(i => i.tip === 'GELIR').reduce((acc, i) => acc + i.tutar, 0);
-    const toplamGider = reportData.filter(i => i.tip === 'GIDER').reduce((acc, i) => acc + i.tutar, 0);
-    const netBakiye = toplamGelir - toplamGider;
-    return { toplamGelir, toplamGider, netBakiye };
-  }, [reportData]);
+  // GÜNCELLEME 2: Pasta grafik verisine artık ihtiyaç yok, bu bölümü siliyoruz.
 
   const columns: ColumnDef<FinansalIslem>[] = [
     { header: 'Tarih', accessorKey: 'tarih' },
     { header: 'Tip', accessorKey: 'tip' },
     { header: 'Açıklama', accessorKey: 'aciklama' },
     { header: 'Kategori', accessorKey: 'kategori' },
-    { header: 'Tutar', accessorKey: 'tutar' },
+    { header: 'Tutar', accessorKey: 'tutar', cell: (item) => `${item.tutar.toFixed(2)} ₺` },
   ];
 
   return (
@@ -122,30 +86,71 @@ function Raporlama() {
         </Stack>
       </ContentCard>
 
-      <Stack direction="row" spacing={3}>
-        <ContentCard spacing={1} sx={{ textAlign: 'center', flex: 1, backgroundColor: '#C8E6C9' }}>
-            <Typography variant="h5" fontWeight="bold">{reportSummary.toplamGelir.toFixed(2)} ₺</Typography>
-            <Typography variant="body2">Toplam Gelir</Typography>
-        </ContentCard>
-        <ContentCard spacing={1} sx={{ textAlign: 'center', flex: 1, backgroundColor: '#FFCDD2' }}>
-            <Typography variant="h5" fontWeight="bold">{reportSummary.toplamGider.toFixed(2)} ₺</Typography>
-            <Typography variant="body2">Toplam Gider</Typography>
-        </ContentCard>
-        <ContentCard spacing={1} sx={{ textAlign: 'center', flex: 1, backgroundColor: '#BBDEFB' }}>
-            <Typography variant="h5" fontWeight="bold">{reportSummary.netBakiye.toFixed(2)} ₺</Typography>
-            <Typography variant="body2">Net Bakiye</Typography>
-        </ContentCard>
-      </Stack>
+      {isSubmitting ? (
+         <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress /></Box>
+      ) : raporOzet && (
+        <>
+          {/* GÜNCELLEME 3: YENİ, BÜYÜK VE SADE ÖZET PANELİ */}
+          <Paper sx={{ p: 3, backgroundColor: '#FAF8F0', border: '1px solid #D7C7A8' }}>
+            <Stack 
+              direction={{ xs: 'column', sm: 'row' }} 
+              divider={<Divider orientation="vertical" flexItem />}
+              spacing={2}
+              justifyContent="space-around"
+              textAlign="center"
+            >
+              <Box>
+                <Typography variant="overline" color="text.secondary">Toplam Gelir</Typography>
+                <Typography variant="h4" fontWeight="bold" color="green">{raporOzet.toplamGelir.toFixed(2)} ₺</Typography>
+              </Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary">Toplam Gider</Typography>
+                <Typography variant="h4" fontWeight="bold" color="red">{raporOzet.toplamGider.toFixed(2)} ₺</Typography>
+              </Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary">Net Bakiye</Typography>
+                <Typography variant="h4" fontWeight="bold" color={raporOzet.netBakiye >= 0 ? 'primary' : 'error'}>{raporOzet.netBakiye.toFixed(2)} ₺</Typography>
+              </Box>
+            </Stack>
+          </Paper>
 
-      <ContentCard title="İşlem Detayları" spacing={0}>
-        <GenericTable
-          columns={columns}
-          data={reportViewData} // Zenginleştirilmiş veriyi kullan
-          isLoading={isSubmitting}
-          error={null}
-          exportFileName={`Finansal_Rapor_${dateRange.start}_-_${dateRange.end}`}
-        />
-      </ContentCard>
+          {/* GÜNCELLEME 4: YAN YANA KATEGORİ DÖKÜM TABLOLARI */}
+          <ContentCard title="Gelir ve Gider Kalemleri Dökümü">
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
+              <Box sx={{ width: '100%', md: { width: '50%' } }}>
+                  <Typography variant="h6" gutterBottom align="center">Gelirler</Typography>
+                  <Paper variant="outlined">
+                      <Table size="small">
+                          <TableHead><TableRow><TableCell>Kategori</TableCell><TableCell align="right">Tutar</TableCell></TableRow></TableHead>
+                          <TableBody>
+                              {raporOzet.gelirlerByKategori.map(gelir => (
+                                  <TableRow key={gelir.kategori}><TableCell>{gelir.kategori || 'Diğer'}</TableCell><TableCell align="right">{gelir.toplamTutar.toFixed(2)} ₺</TableCell></TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  </Paper>
+              </Box>
+              <Box sx={{ width: '100%', md: { width: '50%' } }}>
+                  <Typography variant="h6" gutterBottom align="center">Giderler</Typography>
+                   <Paper variant="outlined">
+                      <Table size="small">
+                          <TableHead><TableRow><TableCell>Kategori</TableCell><TableCell align="right">Tutar</TableCell></TableRow></TableHead>
+                          <TableBody>
+                              {raporOzet.giderlerByKategori.map(gider => (
+                                  <TableRow key={gider.kategori}><TableCell>{gider.kategori || 'Diğer'}</TableCell><TableCell align="right">{gider.toplamTutar.toFixed(2)} ₺</TableCell></TableRow>
+                              ))}
+                          </TableBody>
+                      </Table>
+                  </Paper>
+              </Box>
+            </Stack>
+          </ContentCard>
+          
+          <ContentCard title="Tüm İşlem Detayları (Ham Veri)" spacing={0}>
+            <GenericTable columns={columns} data={islemListesi} isLoading={isSubmitting} error={null} exportFileName={`Finansal_Rapor_${dateRange.start}_-_${dateRange.end}`} />
+          </ContentCard>
+        </>
+      )}
     </Stack>
   );
 }
