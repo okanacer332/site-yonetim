@@ -8,6 +8,7 @@ import com.yonetim.sistemapi.repository.AidatKaydiRepository;
 import com.yonetim.sistemapi.repository.BlokRepository;
 import com.yonetim.sistemapi.repository.DaireRepository;
 import com.yonetim.sistemapi.repository.FinansalIslemRepository;
+import com.yonetim.sistemapi.service.TopluBorclandirmaService; // GÜNCELLEME 1: Yeni servisi import ediyoruz.
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,10 @@ public class AidatController {
     @Autowired
     private FinansalIslemRepository finansalIslemRepository;
 
-    // ... (diğer metodlar aynı)
+    // GÜNCELLEME 2: Yeni asenkron servisimizi buraya enjekte ediyoruz.
+    @Autowired
+    private TopluBorclandirmaService topluBorclandirmaService;
+
     @GetMapping
     public ResponseEntity<List<AidatKaydi>> donemeGoreAidatlariGetir(@RequestParam String donem) {
         return new ResponseEntity<>(aidatKaydiRepository.findByDonem(donem), HttpStatus.OK);
@@ -47,24 +51,16 @@ public class AidatController {
         return new ResponseEntity<>(aidatKaydiRepository.findByDaireId(daireId), HttpStatus.OK);
     }
 
+    // GÜNCELLEME 3: Metodun içini tamamen değiştiriyoruz.
     @PostMapping("/toplu-borc-olustur")
     public ResponseEntity<HttpStatus> topluAidatBorcuOlustur(@RequestParam String donem, @RequestParam BigDecimal tutar) {
-        List<Daire> tumDaireler = daireRepository.findAll();
-        List<AidatKaydi> yeniAidatKayitlari = new ArrayList<>();
+        // Artık ağır veritabanı işlemini burada yapmıyoruz.
+        // İşi asenkron servisimize devrediyoruz.
+        topluBorclandirmaService.aidatBorcuOlusturAsync(donem, tutar);
 
-        for (Daire daire : tumDaireler) {
-            Optional<AidatKaydi> mevcutKayit = aidatKaydiRepository.findByDaireIdAndDonem(daire.getId(), donem);
-            if (mevcutKayit.isEmpty()) {
-                AidatKaydi yeniKayit = new AidatKaydi();
-                yeniKayit.setDaireId(daire.getId());
-                yeniKayit.setDonem(donem);
-                yeniKayit.setBorcTutari(tutar);
-                yeniKayit.setOdendiMi(false);
-                yeniAidatKayitlari.add(yeniKayit);
-            }
-        }
-        aidatKaydiRepository.saveAll(yeniAidatKayitlari);
-        return new ResponseEntity<>(HttpStatus.CREATED);
+        // Kullanıcıyı bekletmeden "İsteğiniz kabul edildi ve işleme alındı"
+        // anlamına gelen 202 (ACCEPTED) durum kodunu dönüyoruz.
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
     /**
@@ -74,6 +70,7 @@ public class AidatController {
      */
     @PostMapping("/{aidatId}/odeme-yap")
     public ResponseEntity<AidatKaydi> odemeAl(@PathVariable String aidatId) {
+        // ... (bu metodun içeriği aynı kalıyor)
         Optional<AidatKaydi> aidatData = aidatKaydiRepository.findById(aidatId);
         if (aidatData.isEmpty()) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -88,13 +85,10 @@ public class AidatController {
         aidatKaydi.setOdemeTarihi(LocalDate.now());
         AidatKaydi guncellenmisAidat = aidatKaydiRepository.save(aidatKaydi);
 
-        // --- AÇIKLAMA OLUŞTURMA MANTIĞI ---
         Optional<Daire> daireData = daireRepository.findById(aidatKaydi.getDaireId());
         if (daireData.isEmpty()) {
-            // Veri tutarsızlığı varsa, basit bir açıklama ile devam et
             FinansalIslem basitGelir = new FinansalIslem();
             basitGelir.setAciklama(aidatKaydi.getDonem() + " aidat ödemesi");
-            // ... diğer alanları doldur ...
             finansalIslemRepository.save(basitGelir);
             return new ResponseEntity<>(guncellenmisAidat, HttpStatus.OK);
         }
@@ -109,11 +103,10 @@ public class AidatController {
 
         String aciklama = String.format("%s - Daire %d (%s) - %s aidatı",
                 blokAdi, daire.getKapiNo(), oturanKisi, aidatKaydi.getDonem());
-        // --- AÇIKLAMA OLUŞTURMA SONU ---
 
         FinansalIslem gelirIslemi = new FinansalIslem();
         gelirIslemi.setTip(FinansalIslem.IslemTipi.GELIR);
-        gelirIslemi.setAciklama(aciklama); // Yeni ve detaylı açıklamayı kullan
+        gelirIslemi.setAciklama(aciklama);
         gelirIslemi.setTutar(aidatKaydi.getBorcTutari());
         gelirIslemi.setTarih(LocalDate.now());
         gelirIslemi.setDaireId(aidatKaydi.getDaireId());

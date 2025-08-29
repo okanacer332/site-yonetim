@@ -120,6 +120,8 @@ function DaireYonetimi() {
       showNotification('success', 'Daire başarıyla eklendi!');
       setFormState(initialFormState);
     } catch (err: any) {
+      // GÜNCELLEME: `useCrudApi` artık akıllı olduğu için karmaşık koda gerek yok.
+      // `err.message` zaten backend'den gelen anlaşılır mesajı içeriyor.
       showNotification('error', err.message);
     } finally {
       setIsSubmitting(false);
@@ -139,6 +141,7 @@ function DaireYonetimi() {
       showNotification('success', 'Daire başarıyla güncellendi!');
       handleCloseEditModal();
     } catch (err: any) {
+      // GÜNCELLEME: Burası da aynı şekilde sadeleşti.
       showNotification('error', err.message);
     }
   };
@@ -150,6 +153,7 @@ function DaireYonetimi() {
       showNotification('error', 'Daire başarıyla silindi!');
       handleCloseDeleteConfirm();
     } catch (err: any) {
+      // GÜNCELLEME: Burası da aynı şekilde sadeleşti.
       showNotification('error', err.message);
     }
   };
@@ -181,102 +185,12 @@ function DaireYonetimi() {
 
   return (
     <Stack spacing={4}>
-      <ContentCard title="Yeni Daire Ekle" component="form" onSubmit={handleEkle}>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={2}>
-            {/* GÜNCELLEME 1: "Blok" alanı artık zorunlu. */}
-            <TextField select label="Blok" name="blokId" value={formState.blokId} onChange={handleFormChange} required fullWidth>
-              {bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}
-            </TextField>
-            {/* GÜNCELLEME 2: "Kapı No" alanı zorunlu ve min. 1 olmalı. */}
-            <TextField label="Kapı No" name="kapiNo" type="number" value={formState.kapiNo} onChange={handleFormChange} required fullWidth inputProps={{ min: 1 }} />
-            <TextField select label="Durum" name="durum" value={formState.durum} onChange={handleFormChange} required fullWidth>
-              <MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem>
-              <MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem>
-              <MenuItem value="BOS">Boş</MenuItem>
-            </TextField>
-          </Stack>
-          <Divider sx={{ my: 1 }}><Typography variant="body2">Mülk Sahibi Bilgileri</Typography></Divider>
-          <Stack direction="row" spacing={2}>
-            {/* GÜNCELLEME 3: "Mülk Sahibi Adı" alanı zorunlu. */}
-            <TextField label="Mülk Sahibi Adı Soyadı" name="mulkSahibiAdi" value={formState.mulkSahibiAdi} onChange={handleFormChange} required fullWidth />
-            {/* GÜNCELLEME 4: "Mülk Sahibi Telefonu" alanı zorunlu. */}
-            <TextField label="Mülk Sahibi Telefonu" name="mulkSahibiTelefonu" value={formState.mulkSahibiTelefonu} onChange={handleFormChange} required fullWidth />
-          </Stack>
-          {formState.durum === 'KIRACI' && (
-            <>
-              <Divider sx={{ my: 1 }}><Typography variant="body2">Kiracı Bilgileri</Typography></Divider>
-              <Stack direction="row" spacing={2}>
-                <TextField label="Kiracı Adı Soyadı" name="kiraciAdi" value={formState.kiraciAdi} onChange={handleFormChange} fullWidth />
-                <TextField label="Kiracı Telefonu" name="kiraciTelefonu" value={formState.kiraciTelefonu} onChange={handleFormChange} fullWidth />
-              </Stack>
-            </>
-          )}
-        </Stack>
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <SubmitButton isLoading={isSubmitting}>Daire Ekle</SubmitButton>
-        </Box>
-      </ContentCard>
-
-      <ContentCard title="Mevcut Daireler" spacing={0}>
-        <GenericTable
-          columns={columns}
-          data={daireViewData}
-          isLoading={dairelerLoading}
-          error={dairelerError}
-          renderActions={(daireView) => (
-            <>
-              <Tooltip title="Düzenle"><IconButton size="small" color="primary" onClick={() => handleOpenEditModal(daireView.original)}><EditIcon /></IconButton></Tooltip>
-              <Tooltip title="Sil"><IconButton size="small" color="error" onClick={() => handleOpenDeleteConfirm(daireView.original)}><DeleteIcon /></IconButton></Tooltip>
-            </>
-          )}
-        />
-      </ContentCard>
-      
-      <Dialog open={editModalOpen} onClose={handleCloseEditModal} fullWidth maxWidth="sm">
-        <DialogTitle>Daire Bilgilerini Düzenle</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField select label="Blok" name="blokId" value={editedDaire.blokId || ''} onChange={handleEditFormChange} required fullWidth>
-              {bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}
-            </TextField>
-            <TextField label="Kapı No" name="kapiNo" type="number" value={editedDaire.kapiNo || ''} onChange={handleEditFormChange} required fullWidth inputProps={{ min: 1 }}/>
-            <TextField select label="Durum" name="durum" value={editedDaire.durum || 'BOS'} onChange={handleEditFormChange} required fullWidth>
-              <MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem>
-              <MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem>
-              <MenuItem value="BOS">Boş</MenuItem>
-            </TextField>
-            <Divider sx={{ my: 1 }}><Typography variant="body2">Mülk Sahibi Bilgileri</Typography></Divider>
-            <TextField label="Mülk Sahibi Adı Soyadı" name="mulkSahibiAdi" value={editedDaire.mulkSahibiAdi || ''} onChange={handleEditFormChange} required fullWidth />
-            <TextField label="Mülk Sahibi Telefonu" name="mulkSahibiTelefonu" value={editedDaire.mulkSahibiTelefonu || ''} onChange={handleEditFormChange} required fullWidth />
-            {editedDaire.durum === 'KIRACI' && (
-              <>
-                <Divider sx={{ my: 1 }}><Typography variant="body2">Kiracı Bilgileri</Typography></Divider>
-                <TextField label="Kiracı Adı Soyadı" name="kiraciAdi" value={editedDaire.kiraciAdi || ''} onChange={handleEditFormChange} fullWidth />
-                <TextField label="Kiracı Telefonu" name="kiraciTelefonu" value={editedDaire.kiraciTelefonu || ''} onChange={handleEditFormChange} fullWidth />
-              </>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseEditModal}>İptal</Button>
-          <Button onClick={handleGuncelle}>Kaydet</Button>
-        </DialogActions>
-      </Dialog>
-
-      <ConfirmDialog
-        open={deleteConfirmOpen}
-        onCancel={handleCloseDeleteConfirm}
-        onConfirm={handleSil}
-        title="Daire Silinsin mi?"
-        message={`"${blokMap.get(selectedDaire?.blokId || '')} - Kapı No: ${selectedDaire?.kapiNo}" dairesini silmek istediğinizden emin misiniz?`}
-      />
-
-      {notification && (
-        <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={handleSnackbarClose} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
-          <Alert onClose={handleSnackbarClose} severity={notification.type} sx={{ width: '100%' }} variant="filled">{notification.message}</Alert>
-        </Snackbar>
-      )}
+      {/* ... JSX içeriği tamamen aynı ... */}
+      <ContentCard title="Yeni Daire Ekle" component="form" onSubmit={handleEkle}><Stack spacing={2}><Stack direction="row" spacing={2}><TextField select label="Blok" name="blokId" value={formState.blokId} onChange={handleFormChange} required fullWidth>{bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}</TextField><TextField label="Kapı No" name="kapiNo" type="number" value={formState.kapiNo} onChange={handleFormChange} required fullWidth inputProps={{ min: 1 }} /><TextField select label="Durum" name="durum" value={formState.durum} onChange={handleFormChange} required fullWidth><MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem><MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem><MenuItem value="BOS">Boş</MenuItem></TextField></Stack><Divider sx={{ my: 1 }}><Typography variant="body2">Mülk Sahibi Bilgileri</Typography></Divider><Stack direction="row" spacing={2}><TextField label="Mülk Sahibi Adı Soyadı" name="mulkSahibiAdi" value={formState.mulkSahibiAdi} onChange={handleFormChange} required fullWidth /><TextField label="Mülk Sahibi Telefonu" name="mulkSahibiTelefonu" value={formState.mulkSahibiTelefonu} onChange={handleFormChange} required fullWidth /></Stack>{formState.durum === 'KIRACI' && (<><Divider sx={{ my: 1 }}><Typography variant="body2">Kiracı Bilgileri</Typography></Divider><Stack direction="row" spacing={2}><TextField label="Kiracı Adı Soyadı" name="kiraciAdi" value={formState.kiraciAdi} onChange={handleFormChange} fullWidth /><TextField label="Kiracı Telefonu" name="kiraciTelefonu" value={formState.kiraciTelefonu} onChange={handleFormChange} fullWidth /></Stack></>)}</Stack><Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}><SubmitButton isLoading={isSubmitting}>Daire Ekle</SubmitButton></Box></ContentCard>
+      <ContentCard title="Mevcut Daireler" spacing={0}><GenericTable columns={columns} data={daireViewData} isLoading={dairelerLoading} error={dairelerError} renderActions={(daireView) => (<><Tooltip title="Düzenle"><IconButton size="small" color="primary" onClick={() => handleOpenEditModal(daireView.original)}><EditIcon /></IconButton></Tooltip><Tooltip title="Sil"><IconButton size="small" color="error" onClick={() => handleOpenDeleteConfirm(daireView.original)}><DeleteIcon /></IconButton></Tooltip></>)}/></ContentCard>
+      <Dialog open={editModalOpen} onClose={handleCloseEditModal} fullWidth maxWidth="sm"><DialogTitle>Daire Bilgilerini Düzenle</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}><TextField select label="Blok" name="blokId" value={editedDaire.blokId || ''} onChange={handleEditFormChange} required fullWidth>{bloklar.map(blok => <MenuItem key={blok.id} value={blok.id}>{blok.ad}</MenuItem>)}</TextField><TextField label="Kapı No" name="kapiNo" type="number" value={editedDaire.kapiNo || ''} onChange={handleEditFormChange} required fullWidth inputProps={{ min: 1 }}/><TextField select label="Durum" name="durum" value={editedDaire.durum || 'BOS'} onChange={handleEditFormChange} required fullWidth><MenuItem value="MULK_SAHIBI">Mülk Sahibi Oturuyor</MenuItem><MenuItem value="KIRACI">Kiracı Oturuyor</MenuItem><MenuItem value="BOS">Boş</MenuItem></TextField><Divider sx={{ my: 1 }}><Typography variant="body2">Mülk Sahibi Bilgileri</Typography></Divider><TextField label="Mülk Sahibi Adı Soyadı" name="mulkSahibiAdi" value={editedDaire.mulkSahibiAdi || ''} onChange={handleEditFormChange} required fullWidth /><TextField label="Mülk Sahibi Telefonu" name="mulkSahibiTelefonu" value={editedDaire.mulkSahibiTelefonu || ''} onChange={handleEditFormChange} required fullWidth />{editedDaire.durum === 'KIRACI' && (<><Divider sx={{ my: 1 }}><Typography variant="body2">Kiracı Bilgileri</Typography></Divider><TextField label="Kiracı Adı Soyadı" name="kiraciAdi" value={editedDaire.kiraciAdi || ''} onChange={handleEditFormChange} fullWidth /><TextField label="Kiracı Telefonu" name="kiraciTelefonu" value={editedDaire.kiraciTelefonu || ''} onChange={handleEditFormChange} fullWidth /></>)}</Stack></DialogContent><DialogActions><Button onClick={handleCloseEditModal}>İptal</Button><Button onClick={handleGuncelle}>Kaydet</Button></DialogActions></Dialog>
+      <ConfirmDialog open={deleteConfirmOpen} onCancel={handleCloseDeleteConfirm} onConfirm={handleSil} title="Daire Silinsin mi?" message={`"${blokMap.get(selectedDaire?.blokId || '')} - Kapı No: ${selectedDaire?.kapiNo}" dairesini silmek istediğinizden emin misiniz?`}/>
+      {notification && (<Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={handleSnackbarClose} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}><Alert onClose={handleSnackbarClose} severity={notification.type} sx={{ width: '100%' }} variant="filled">{notification.message}</Alert></Snackbar>)}
     </Stack>
   );
 }

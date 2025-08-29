@@ -1,9 +1,29 @@
 import { useState, useCallback } from 'react';
 
-// API'nin temel URL'sini merkezi bir yerden yönetiyoruz.
 const API_BASE_URL = 'http://localhost:8080/api';
 
-// Bu hook'un dışarıya döndüreceği değerlerin ve fonksiyonların tip tanımı.
+// GÜNCELLEME 1: API hatalarını merkezi olarak işleyecek bir yardımcı fonksiyon ekliyoruz.
+const handleApiError = async (response: Response) => {
+  try {
+    // Sunucudan gelen JSON formatındaki hatayı okumaya çalış.
+    const errorData = await response.json();
+    // Eğer bizim GlobalExceptionHandler'ımızın gönderdiği 'message' alanı varsa, onu kullan.
+    if (errorData && errorData.message) {
+      throw new Error(errorData.message);
+    }
+    // JSON'da message yoksa veya JSON formatında değilse, genel bir HTTP hatası fırlat.
+    throw new Error(`Sunucu Hatası: ${response.status} ${response.statusText}`);
+  } catch (e) {
+    // Yukarıdaki try bloğunda bir hata olursa (örn: JSON parse hatası),
+    // ilk hatayı (eğer anlamlıysa) veya genel bir hata fırlat.
+    if (e instanceof Error) {
+       throw e;
+    }
+    throw new Error(`Bilinmeyen bir ağ hatası oluştu.`);
+  }
+};
+
+
 interface UseCrudApi<T> {
   data: T[];
   isLoading: boolean;
@@ -14,7 +34,6 @@ interface UseCrudApi<T> {
   deleteItem: (id: string) => Promise<void>;
 }
 
-// T: Jenerik bir tip, bu sayede hook'u hem Blok, hem Daire, hem de diğer modellerle kullanabiliriz.
 export function useCrudApi<T extends { id: string }>(endpoint: string): UseCrudApi<T> {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -27,7 +46,10 @@ export function useCrudApi<T extends { id: string }>(endpoint: string): UseCrudA
     setError(null);
     try {
       const response = await fetch(fullUrl);
-      if (!response.ok) throw new Error('Veri çekilemedi.');
+      if (!response.ok) {
+        // GÜNCELLEME 2: Genel hata yerine yeni yardımcı fonksiyonumuzu kullanıyoruz.
+        return await handleApiError(response);
+      }
       const result = await response.json();
       setData(result);
     } catch (err: any) {
@@ -43,8 +65,11 @@ export function useCrudApi<T extends { id: string }>(endpoint: string): UseCrudA
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
     });
-    if (!response.ok) throw new Error('Öğe eklenemedi.');
-    fetchData(); // Listeyi güncelle
+    if (!response.ok) {
+        // GÜNCELLEME 3: Tüm API çağrılarında merkezi hata yöneticisini kullanıyoruz.
+        return await handleApiError(response);
+    }
+    fetchData(); 
     return response.json();
   };
 
@@ -54,8 +79,10 @@ export function useCrudApi<T extends { id: string }>(endpoint: string): UseCrudA
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
     });
-    if (!response.ok) throw new Error('Öğe güncellenemedi.');
-    fetchData(); // Listeyi güncelle
+    if (!response.ok) {
+        return await handleApiError(response);
+    }
+    fetchData();
     return response.json();
   };
 
@@ -63,8 +90,10 @@ export function useCrudApi<T extends { id: string }>(endpoint: string): UseCrudA
     const response = await fetch(`${fullUrl}/${id}`, {
       method: 'DELETE',
     });
-    if (!response.ok) throw new Error('Öğe silinemedi.');
-    fetchData(); // Listeyi güncelle
+    if (!response.ok) {
+        return await handleApiError(response);
+    }
+    fetchData();
   };
 
   return { data, isLoading, error, fetchData, addItem, updateItem, deleteItem };
