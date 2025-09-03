@@ -1,68 +1,149 @@
-import { app, BrowserWindow, shell } from 'electron'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { app, BrowserWindow, shell } from 'electron';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn, ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 
-// --- HATA DÜZELTMESİ ---
-// ES Modüllerinde __dirname değişkeni bulunmadığı için, onu manuel olarak tanımlıyoruz.
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-// --- DÜZELTME SONU ---
+// --- KARA KUTU: LOGLAMA SİSTEMİ ---
+const logFilePath = path.join(app.getPath('desktop'), 'site-yonetim-log.txt');
+const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+function log(message: string) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `${timestamp}: ${message}\n`;
+  console.log(logMessage); // Geliştirme ortamı için konsola da yaz
+  logStream.write(logMessage); // Dosyaya yaz
+}
+log('--- Uygulama Başlatılıyor ---');
 
-// Bu bölüm, projenizin derlenmiş dosyalarının nerede olduğunu tanımlar.
-// Bu yapı, projenizin hem geliştirme (dev) hem de üretim (build) modunda
-// doğru dosya yollarını bulmasını sağlar.
-process.env.APP_ROOT = path.join(__dirname, '..')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'renderer')
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
-let win: BrowserWindow | null
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 1024, // Pencere genişliğini biraz daha artıralım
-    height: 768, // Pencere yüksekliğini artıralım
+process.env.APP_ROOT = path.join(__dirname, '..');
+
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
+const RENDERER_DIST = path.join(process.env.APP_ROOT, 'renderer');
+
+let childProcesses: ChildProcess[] = [];
+
+app.on('quit', () => {
+  log('Uygulama kapatılıyor, tüm alt süreçler sonlandırılıyor...');
+  childProcesses.forEach(p => p.kill());
+  logStream.end();
+});
+
+
+async function createWindow() {
+  try {
+    await startMongo();
+    await startJavaBackend();
+  } catch (error) {
+    log(`Başlatma sırasında kritik hata: ${error}`);
+    app.quit();
+    return;
+  }
+  
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 800,
     autoHideMenuBar: true,
-    title: '2000 Evler Sitesi Yönetim', // Pencere başlığını burada belirliyoruz
-    icon: path.join(process.env.APP_ROOT, 'build', 'icon.png'), // Uygulama ikonu (ileride ekleyeceğiz)
+    title: 'ACR Site Yönetim Sistemi',
+    icon: path.join(process.env.APP_ROOT, 'build', 'icon.ico'),
     webPreferences: {
       sandbox: false,
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(__dirname, '..', 'preload', 'index.js'),
     },
-  })
+  });
 
-  // Renderer-process'e test mesajı gönderme
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', (new Date).toLocaleString())
-  })
-
-  // Dış linklerin varsayılan tarayıcıda açılmasını sağlar
   win.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
+    shell.openExternal(details.url);
+    return { action: 'deny' };
+  });
 
-  // Geliştirme modunda Vite sunucusunu, üretim modunda ise derlenmiş dosyayı yükle
   if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL)
+    win.loadURL(VITE_DEV_SERVER_URL);
+    win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+    win.loadFile(path.join(RENDERER_DIST, 'index.html'));
   }
+  log('Arayüz penceresi başarıyla yüklendi.');
 }
 
-// Tüm pencereler kapandığında uygulamayı kapat (macOS hariç)
+function getPath(relativePath: string): string {
+  const prodPath = path.join(process.resourcesPath, ...relativePath.split('/'));
+  const devPath = path.join(process.env.APP_ROOT, ...relativePath.split('/'));
+  return fs.existsSync(prodPath) ? prodPath : devPath;
+}
+
+function startMongo(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const dbPath = path.join(app.getPath('userData'), 'db');
+    if (!fs.existsSync(dbPath)) {
+      fs.mkdirSync(dbPath, { recursive: true });
+    }
+    
+    const mongoPath = getPath('vendor/mongodb/bin/mongod.exe');
+    log(`MongoDB başlatılıyor: ${mongoPath}`);
+    if (!fs.existsSync(mongoPath)) {
+        return reject(`MongoDB çalıştırılabilir dosyası bulunamadı: ${mongoPath}`);
+    }
+
+    const mongoProcess = spawn(mongoPath, [`--dbpath=${dbPath}`]);
+    childProcesses.push(mongoProcess);
+
+    mongoProcess.stdout.on('data', (data) => {
+      const message = data.toString();
+      log(`[MongoDB]: ${message}`);
+      if (message.includes('Waiting for connections')) {
+        log('MongoDB başarıyla başlatıldı.');
+        resolve();
+      }
+    });
+
+    mongoProcess.stderr.on('data', (data) => {
+      log(`[MongoDB HATA]: ${data.toString()}`);
+    });
+    
+    mongoProcess.on('close', (code) => {
+      if (code !== 0) reject(`MongoDB beklenmedik bir şekilde kapandı, kod: ${code}`);
+    });
+  });
+}
+
+function startJavaBackend(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const jrePath = getPath('vendor/jre/bin/java.exe');
+    const jarPath = getPath('vendor/jar/sistemapi.jar');
+    log(`Java Backend başlatılıyor: ${jrePath} -jar ${jarPath}`);
+    if (!fs.existsSync(jrePath)) return reject(`Java çalıştırılabilir dosyası bulunamadı: ${jrePath}`);
+    if (!fs.existsSync(jarPath)) return reject(`sistemapi.jar dosyası bulunamadı: ${jarPath}`);
+
+    const javaProcess = spawn(jrePath, ['-jar', jarPath]);
+    childProcesses.push(javaProcess);
+
+    javaProcess.stdout.on('data', (data) => {
+      const message = data.toString();
+      log(`[Java Backend]: ${message}`);
+      if (message.includes('Started SistemapiApplication')) {
+        log('Java Backend başarıyla başlatıldı.');
+        resolve();
+      }
+    });
+
+    javaProcess.stderr.on('data', (data) => {
+      log(`[Java Backend HATA]: ${data.toString()}`);
+    });
+    
+    javaProcess.on('close', (code) => {
+      if (code !== 0) reject(`Java Backend beklenmedik bir şekilde kapandı, kod: ${code}`);
+    });
+  });
+}
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
-    win = null
+    app.quit();
   }
-})
+});
 
-// Dock ikonu tıklandığında yeni pencere oluştur (macOS)
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow()
-  }
-})
-
-// Uygulama hazır olduğunda pencereyi oluştur
-app.whenReady().then(createWindow)
+app.whenReady().then(createWindow).catch(e => log(`whenReady hatası: ${e}`));

@@ -3,7 +3,7 @@ package com.yonetim.sistemapi.model;
 import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;         // GÜNCELLEME 1: Gerekli import'lar eklendi.
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.FieldType;
 
 import java.math.BigDecimal;
@@ -16,8 +16,7 @@ public class FinansalIslem {
     @Id
     private String id;
 
-    // GÜNCELLEME 2: Enum tipinin veritabanına her zaman String olarak kaydedilmesini garanti altına alıyoruz.
-    // Bu, sorgularımızda "GELIR" veya "GIDER" metinleriyle güvenilir bir şekilde filtreleme yapabilmemizi sağlar.
+    // Bu ekleme sayesinde enum'lar veritabanına "GELIR" veya "GIDER" olarak kaydedilir.
     @Field(targetType = FieldType.STRING)
     private IslemTipi tip; // GELIR veya GIDER
 

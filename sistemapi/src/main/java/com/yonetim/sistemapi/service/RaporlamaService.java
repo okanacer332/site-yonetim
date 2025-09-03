@@ -35,7 +35,7 @@ public class RaporlamaService {
 
         // --- GİDER ÖZETİ SORGUSU (HATANIN DÜZELTİLDİĞİ YER) ---
         Aggregation giderAggregation = newAggregation(
-                // HATA BURADAYDI: gte(bitisTarihi) -> gte(baslangicTarihi) olarak düzeltildi.
+                // DÜZELTİLMESİ GEREKEN YER BURASI
                 match(Criteria.where("tarih").gte(baslangicTarihi).lte(bitisTarihi).and("tip").is(FinansalIslem.IslemTipi.GIDER)),
                 group("kategori").sum("tutar").as("toplamTutar"),
                 project("toplamTutar").and("_id").as("kategori")

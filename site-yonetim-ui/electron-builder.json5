@@ -1,15 +1,22 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.acrtech.siteyonetim",
+  "productName": "ACR Site Yönetim Sistemi",
   "asar": true,
-  "productName": "YourAppName",
   "directories": {
     "output": "release/${version}"
   },
   "files": [
     "dist",
     "dist-electron"
+  ],
+  // YENİ EKLENEN BÖLÜM: vendor klasörünü pakete dahil et
+  "extraResources": [
+    {
+      "from": "./vendor/",
+      "to": "vendor"
+    }
   ],
   "mac": {
     "target": [
@@ -21,8 +28,10 @@
     "target": [
       {
         "target": "nsis",
+        // 32-bit ve 64-bit desteğini garantiliyoruz
         "arch": [
-          "x64"
+          "x64",
+          "ia32"
         ]
       }
     ],

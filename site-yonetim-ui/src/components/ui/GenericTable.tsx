@@ -65,9 +65,9 @@ function GenericTable<T extends { id: string }>({ columns, data, isLoading, erro
     setOrderBy(property);
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
+  const handleChangePage = (_event: unknown, newPage: number) => {
+  setPage(newPage);
+};
 
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
