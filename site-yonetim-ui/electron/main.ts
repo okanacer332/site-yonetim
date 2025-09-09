@@ -28,20 +28,22 @@ let childProcesses: ChildProcess[] = [];
 
 app.on('quit', () => {
   log('Uygulama kapatılıyor, tüm alt süreçler sonlandırılıyor...');
-  childProcesses.forEach(p => p.kill());
+  childProcesses.forEach(p => {
+  try { p.kill(); } catch (e) { log(`Alt süreç kapatılamadı: ${e}`); }
+});
   logStream.end();
 });
 
 
 async function createWindow() {
-  try {
-    await startMongo();
-    await startJavaBackend();
-  } catch (error) {
-    log(`Başlatma sırasında kritik hata: ${error}`);
-    app.quit();
-    return;
-  }
+  // try {
+  //   await startMongo();
+  //   await startJavaBackend();
+  // } catch (error) {
+  //   log(`Başlatma sırasında kritik hata: ${error}`);
+  //   app.quit();
+  //   return;
+  // }
   
   const win = new BrowserWindow({
     width: 1280,
@@ -88,7 +90,8 @@ function startMongo(): Promise<void> {
         return reject(`MongoDB çalıştırılabilir dosyası bulunamadı: ${mongoPath}`);
     }
 
-    const mongoProcess = spawn(mongoPath, [`--dbpath=${dbPath}`]);
+    const mongoProcess = spawn(mongoPath, [`--dbpath=${dbPath}`, `--port=27017`]);
+
     childProcesses.push(mongoProcess);
 
     mongoProcess.stdout.on('data', (data) => {

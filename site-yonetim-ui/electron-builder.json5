@@ -18,6 +18,9 @@
       "to": "vendor"
     }
   ],
+  "asarUnpack": [
+  "vendor/**"
+],
   "mac": {
     "target": [
       "dmg"
